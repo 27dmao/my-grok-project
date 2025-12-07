@@ -61,13 +61,13 @@ Relationships & Communication: assess tone, boundaries, honesty, and power dynam
 
 Output Structure
 
-Return a markdown report with clear headings (##) and short paragraphs or bullet lists. Include at least one chart per report. Avoid diagnostic language; present interpretations as possibilities, not facts.
+Return a markdown report with clear headings (##) and short paragraphs or bullet lists. Avoid diagnostic language; present interpretations as possibilities, not facts.
 
 ## Brief Overview
 Summarize the conversation: who is talking, what it's about, and its purpose.
 
 ## Emotional Timeline
-Describe emotional states across the call; map shifts and triggers. Use Python (matplotlib, no seaborn) to generate a line chart with time on the x-axis and normalized emotional intensity on the y-axis. Provide a paragraph explaining the chart.
+Describe emotional states across the call; map shifts and triggers. Provide a detailed narrative description of the emotional journey throughout the conversation.
 
 ## Personality Pattern Analysis
 Create a table mapping each speaker to their predominant Kessler pattern(s) with brief rationale. Describe how these patterns influence behaviour and relationships.
@@ -87,16 +87,13 @@ Bullet-list the maxims that were upheld or violated, with examples from the conv
 ## Growth Recommendations
 Provide actionable suggestions for personal and professional growth: meditation practices, boundary setting, calculated risk-taking, leveraging anti-fragile network effects, etc. Offer guidance for integrating "mind sight" and expanding perception.
 
-## Visual & Data Appendix
-Include additional charts (e.g., distribution of speaking time per speaker, bar chart of detected patterns) using Python. Each chart must be in its own plot and avoid specifying colours. Use pandas to prepare data frames where appropriate.
-
 Implementation Notes
 
 - Use headings and lists to ensure readability.
 - When citing "Mind Sight" research, refer to it as an example of the mind's potential for expanded perception.
 - Patterns are not identities; remind the reader that they are temporary survival scripts.
-- When making charts, call python_user_visible with the appropriate code; do not specify colours or use subplots.
-- Produce a single cohesive report with all sections and charts.
+- Produce a single cohesive report with all sections.
+- Do NOT generate any charts, graphs, or visualizations. Focus on narrative analysis and text-based insights only.
 
 CONSTRAINTS:
 - You are NOT a therapist or doctor.
@@ -211,6 +208,21 @@ def format_analysis_html(analysis_text: str) -> str:
     
     # Extract code blocks and replace with placeholders
     text_without_code = re.sub(code_block_pattern, extract_code_block, analysis_text, flags=re.DOTALL)
+    
+    # ALSO extract [pythonuservisible: ...] format (Grok's special format)
+    # Handle both case-sensitive and case-insensitive variations
+    pythonuservisible_pattern = r'\[pythonuservisible:\s*(.*?)\]'
+    
+    def extract_pythonuservisible(match):
+        code_content = match.group(1).strip()
+        if code_content:
+            idx = len(code_blocks)
+            code_blocks.append(code_content)
+            return f'__CODE_BLOCK_{idx}__'
+        return ''
+    
+    # Extract pythonuservisible blocks and replace with placeholders (case-insensitive, multiline)
+    text_without_code = re.sub(pythonuservisible_pattern, extract_pythonuservisible, text_without_code, flags=re.DOTALL | re.IGNORECASE)
     
     # NOW replace CODEBLOCK references - map them to actual code blocks if available
     # CODEBLOCK0 -> first code block, CODEBLOCK1 -> second, etc.
@@ -469,6 +481,12 @@ def execute_matplotlib_code(code: str) -> str:
         return None
     
     try:
+        # Clean up the code - normalize whitespace and newlines
+        code = code.strip()
+        # Replace multiple spaces with single space (but preserve newlines)
+        lines = code.split('\n')
+        code = '\n'.join(line.strip() for line in lines if line.strip())
+        
         # Create a safe execution environment
         safe_globals = {
             'plt': plt,
@@ -485,6 +503,12 @@ def execute_matplotlib_code(code: str) -> str:
         # Remove plt.show() calls as we'll save instead
         code_modified = re.sub(r'plt\.show\(\)', '', code)
         code_modified = re.sub(r'plt\.show\s*\(\s*\)', '', code_modified)
+        
+        # Ensure we have a figure - if code doesn't create one, create it
+        if 'plt.figure' not in code_modified and 'plt.subplot' not in code_modified:
+            # Check if any plotting commands exist
+            if any(cmd in code_modified for cmd in ['plt.plot', 'plt.bar', 'plt.scatter', 'plt.hist', 'plt.pie']):
+                code_modified = 'plt.figure()\n' + code_modified
         
         # Execute the code
         exec(code_modified, safe_globals)
@@ -507,24 +531,15 @@ def execute_matplotlib_code(code: str) -> str:
             plt.close('all')
             return None
     except Exception as e:
-        # If execution fails, return None
+        # If execution fails, return None (silently fail to avoid breaking the page)
+        # In development, you might want to log this: print(f"Chart generation failed: {e}")
         plt.close('all')
         return None
 
 
 def format_code_block(code: str) -> str:
-    """Format Python code block - execute if matplotlib, otherwise show as code."""
-    # Check if this looks like matplotlib code
-    is_matplotlib = any(keyword in code.lower() for keyword in ['matplotlib', 'plt.', 'plt.figure', 'plt.plot', 'plt.bar', 'plt.show', 'import matplotlib'])
-    
-    if is_matplotlib and MATPLOTLIB_AVAILABLE:
-        # Try to execute and generate chart
-        chart_filename = execute_matplotlib_code(code)
-        if chart_filename:
-            # Return image tag instead of code block
-            return f'<div class="analysis-chart"><img src="{url_for("static", filename=chart_filename)}" alt="Generated chart" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>'
-    
-    # If not matplotlib or execution failed, show as code
+    """Format Python code block - display as code only (no execution)."""
+    # Always display code as text, do not execute matplotlib code
     code = code.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     return f'<div class="analysis-code-block"><pre><code>{code}</code></pre></div>'
 
