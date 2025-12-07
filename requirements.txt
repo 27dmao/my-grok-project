@@ -1,0 +1,11 @@
+python-dotenv
+requests
+flask
+matplotlib
+pandas
+numpy
+
+# Optional: For audio transcription (choose one or both)
+# openai  # For OpenAI Whisper API (requires OPENAI_API_KEY in .env)
+# openai-whisper  # For local Whisper transcription (no API key needed, but requires more disk space)
+
